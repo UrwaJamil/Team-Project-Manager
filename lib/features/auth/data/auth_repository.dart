@@ -42,4 +42,8 @@ class AuthRepository {
   }
 
   Future<void> signOut() => _auth.signOut();
+
+  /// Permanently deletes [user]'s Auth account (used to roll back a
+  /// registration whose `users/{uid}` profile write failed).
+  Future<void> deleteUser(User user) => user.delete();
 }

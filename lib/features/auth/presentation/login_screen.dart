@@ -4,9 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../application/auth_controller.dart';
-import '../data/app_user.dart';
 import 'widgets/auth_scaffold.dart';
-import 'widgets/role_toggle.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -19,9 +17,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  // Visual/pre-fill convenience only — it does not affect routing. The
-  // account's real `defaultRole` always decides the landing dashboard.
-  UserRole _role = UserRole.leader;
   bool _submitting = false;
   String? _error;
   bool _obscurePassword = true;
@@ -47,9 +42,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             password: _passwordController.text,
           );
     } on FirebaseAuthException catch (e) {
-      setState(() => _error = _friendlyAuthError(e));
+      if (mounted) setState(() => _error = _friendlyAuthError(e));
     } catch (_) {
-      setState(() => _error = 'Something went wrong. Please try again.');
+      if (mounted) {
+        setState(() => _error = 'Something went wrong. Please try again.');
+      }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -57,17 +54,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Why the user was signed out, if it wasn't their choice (e.g. their
+    // registration never finished writing users/{uid}).
+    final error = _error ?? ref.watch(authControllerProvider).message;
     return AuthScaffold(
       child: Form(
         key: _formKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            RoleToggle(
-              value: _role,
-              onChanged: (role) => setState(() => _role = role),
-            ),
-            const SizedBox(height: 20),
             TextFormField(
               controller: _emailController,
               keyboardType: TextInputType.emailAddress,
@@ -104,10 +99,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   : null,
               onFieldSubmitted: (_) => _submit(),
             ),
-            if (_error != null) ...[
+            if (error != null) ...[
               const SizedBox(height: 12),
               Text(
-                _error!,
+                error,
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ],

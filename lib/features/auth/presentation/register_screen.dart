@@ -49,9 +49,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             defaultRole: _role,
           );
     } on FirebaseAuthException catch (e) {
-      setState(() => _error = _friendlyAuthError(e));
+      if (mounted) setState(() => _error = _friendlyAuthError(e));
+    } on AuthFlowException catch (e) {
+      if (mounted) setState(() => _error = e.message);
     } catch (_) {
-      setState(() => _error = 'Something went wrong. Please try again.');
+      if (mounted) {
+        setState(() => _error = 'Something went wrong. Please try again.');
+      }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

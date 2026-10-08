@@ -20,8 +20,15 @@ enum UserRole {
     UserRole.member => 'Team Member',
   };
 
-  static UserRole fromValue(String value) =>
-      value == 'leader' ? UserRole.leader : UserRole.member;
+  /// Strict parse of a stored `defaultRole`: only the exact strings
+  /// `"leader"` and `"member"` are valid. Anything else (a missing field, a
+  /// legacy pre-rename abbreviation, different casing) is rejected rather than
+  /// silently coerced into a role.
+  static UserRole fromValue(String? value) => switch (value) {
+    'leader' => UserRole.leader,
+    'member' => UserRole.member,
+    _ => throw FormatException('Unknown defaultRole value: "$value"'),
+  };
 }
 
 class AppUser {
@@ -46,7 +53,7 @@ class AppUser {
       uid: uid,
       name: map['name'] as String? ?? '',
       email: map['email'] as String? ?? '',
-      defaultRole: UserRole.fromValue(map['defaultRole'] as String? ?? 'leader'),
+      defaultRole: UserRole.fromValue(map['defaultRole'] as String?),
       skillTags: List<String>.from(map['skillTags'] as List? ?? const []),
       createdAt:
           (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),

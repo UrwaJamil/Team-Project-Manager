@@ -6,14 +6,14 @@ import 'package:team_project_manager/app/theme.dart';
 import 'package:team_project_manager/features/auth/presentation/login_screen.dart';
 import 'package:team_project_manager/features/auth/presentation/register_screen.dart';
 
+import 'support/fake_auth.dart';
+
 // These tests render the login/register screens in isolation (not the
-// full app/router), since the full app reaches Firebase as soon as it
-// builds (via authControllerProvider), which isn't available under
-// `flutter test` without a Firebase emulator/mocking setup — out of scope
-// for this phase. CLAUDE.md's testing rule to add once repositories exist:
-// cover permission logic, not these widgets' Firebase calls directly.
+// full app/router), with in-memory fakes in place of the Firebase-backed
+// repositories.
 Widget _wrap(Widget child) {
   return ProviderScope(
+    overrides: fakeAuthOverrides(),
     child: MaterialApp(
       theme: AppTheme.lightTheme,
       home: child,
@@ -22,14 +22,16 @@ Widget _wrap(Widget child) {
 }
 
 void main() {
-  testWidgets('login screen shows logo, role toggle, fields and link', (
+  testWidgets('login screen shows logo, fields and link, but no role toggle', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(_wrap(const LoginScreen()));
 
     expect(find.text('Team Project Manager'), findsOneWidget);
-    expect(find.text('Project Leader'), findsOneWidget);
-    expect(find.text('Team Member'), findsOneWidget);
+    // The landing dashboard comes from users/{uid}.defaultRole, never a
+    // login-screen choice.
+    expect(find.text('Project Leader'), findsNothing);
+    expect(find.text('Team Member'), findsNothing);
     expect(find.text('Email'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Login'), findsOneWidget);

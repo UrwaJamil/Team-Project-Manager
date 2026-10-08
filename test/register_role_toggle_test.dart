@@ -14,7 +14,7 @@ class _RecordingAuthController extends AuthController {
   UserRole? capturedRole;
 
   @override
-  AuthState build() => const AuthState(loading: false);
+  AuthState build() => const AuthState.unauthenticated();
 
   @override
   Future<void> register({
@@ -88,7 +88,7 @@ void main() {
       await tester.enterText(find.widgetWithText(TextFormField, 'Name'), 'Test User');
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Email'),
-        'test.pm@example.com',
+        'test.leader@example.com',
       );
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Password'),

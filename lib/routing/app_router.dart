@@ -32,40 +32,12 @@ final routerProvider = Provider<GoRouter>((ref) {
     refreshListenable: refresh,
     redirect: (context, state) {
       final auth = ref.read(authControllerProvider);
-      final atSplash = state.matchedLocation == '/splash';
-
-      // FR-1.4 groundwork, part 1: wait for the initial auth check before
-      // sending anyone to login or a dashboard, so neither one flashes.
-      if (auth.loading) {
-        return atSplash ? null : '/splash';
-      }
-
-      final loggingIn =
-          state.matchedLocation == '/login' ||
-          state.matchedLocation == '/register';
-
-      // FR-1.4 groundwork, part 2: logged-out users always go to login.
-      if (!auth.isLoggedIn) {
-        return loggingIn ? null : '/login';
-      }
-
-      // FR-1.4 groundwork, part 3: logged-in users never see login/register.
-      if (loggingIn || atSplash) {
-        return auth.sessionRole == UserRole.leader
-            ? '/leader/projects'
-            : '/member/tasks';
-      }
-
-      final role = auth.sessionRole;
-      if (role == UserRole.leader &&
-          state.matchedLocation.startsWith('/member')) {
-        return '/leader/projects';
-      }
-      if (role == UserRole.member &&
-          state.matchedLocation.startsWith('/leader')) {
-        return '/member/tasks';
-      }
-      return null;
+      final target = authRedirect(auth, state.matchedLocation);
+      authLog(
+        'redirect: ${state.matchedLocation} -> ${target ?? '(stay)'} '
+        '[status=${auth.status.name}, role=${auth.sessionRole?.value}]',
+      );
+      return target;
     },
     routes: [
       GoRoute(
@@ -215,3 +187,34 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+/// Pure auth gate behind [routerProvider]'s `redirect`; `null` means stay.
+String? authRedirect(AuthState auth, String location) {
+  final atSplash = location == '/splash';
+  final atAuthScreen = location == '/login' || location == '/register';
+
+  switch (auth.status) {
+    // Signed-in-but-unresolved (or about to be signed out): hold on the
+    // splash so no dashboard — or login — flashes in the meantime.
+    case AuthStatus.loading:
+    case AuthStatus.profileMissing:
+      return atSplash ? null : '/splash';
+
+    case AuthStatus.unauthenticated:
+      return atAuthScreen ? null : '/login';
+
+    case AuthStatus.authenticated:
+      final home = switch (auth.sessionRole!) {
+        UserRole.leader => '/leader/projects',
+        UserRole.member => '/member/tasks',
+      };
+      if (atAuthScreen || atSplash) return home;
+      if (auth.sessionRole == UserRole.leader && location.startsWith('/member')) {
+        return home;
+      }
+      if (auth.sessionRole == UserRole.member && location.startsWith('/leader')) {
+        return home;
+      }
+      return null;
+  }
+}
