@@ -3,31 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/theme.dart';
 import 'app/theme_mode_controller.dart';
-import 'core/user_role.dart';
 import 'routing/app_router.dart';
 
-class TeamProjectManagerApp extends ConsumerStatefulWidget {
+class TeamProjectManagerApp extends ConsumerWidget {
   const TeamProjectManagerApp({super.key});
 
   @override
-  ConsumerState<TeamProjectManagerApp> createState() =>
-      _TeamProjectManagerAppState();
-}
-
-class _TeamProjectManagerAppState
-    extends ConsumerState<TeamProjectManagerApp> {
-  final _session = SessionController();
-  late final _router = buildAppRouter(_session);
-
-  @override
-  void dispose() {
-    _session.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
+    final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
       title: 'Team Project Manager',
@@ -35,7 +19,7 @@ class _TeamProjectManagerAppState
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
-      routerConfig: _router,
+      routerConfig: router,
     );
   }
 }

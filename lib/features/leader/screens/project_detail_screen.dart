@@ -18,7 +18,7 @@ class ProjectDetailScreen extends StatelessWidget {
             'Project Detail\n(Kanban board + members + chat access)\ncoming in a later phase',
         child: FilledButton.tonal(
           onPressed: () =>
-              context.go('/pm/projects/$projectId/tasks/demo-task'),
+              context.go('/leader/projects/$projectId/tasks/demo-task'),
           child: const Text('Open demo task detail'),
         ),
       ),

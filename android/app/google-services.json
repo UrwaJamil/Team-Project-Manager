@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "485459398533",
+    "project_id": "protrack-9c76f",
+    "storage_bucket": "protrack-9c76f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:485459398533:android:bd4cd5ddaa5c33b6b43eec",
+        "android_client_info": {
+          "package_name": "com.teamprojectmanager.team_project_manager"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAJ3o0jDBf2L_UeFyRzXZAKMmzYo0G9CbI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

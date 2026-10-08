@@ -1,0 +1,20 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Phase 1: any authenticated user may read any profile (needed later
+    // for member lists, task-assignee pickers, @mentions, etc.), but a
+    // user may only create/update their own document.
+    match /users/{uid} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == uid;
+      allow update: if request.auth != null && request.auth.uid == uid;
+      allow delete: if false;
+    }
+
+    // TODO(phase 2+): projects, tasks, leaveRequests, notifications rules.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

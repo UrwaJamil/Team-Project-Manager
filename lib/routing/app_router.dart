@@ -1,59 +1,98 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../core/user_role.dart';
+import '../features/auth/application/auth_controller.dart';
+import '../features/auth/data/app_user.dart';
+import '../features/auth/presentation/login_screen.dart';
+import '../features/auth/presentation/register_screen.dart';
 import '../features/common/notifications_screen.dart';
+import '../features/common/splash_screen.dart';
+import '../features/leader/screens/analytics_screen.dart';
+import '../features/leader/screens/calendar_screen.dart';
+import '../features/leader/screens/leave_requests_screen.dart';
+import '../features/leader/screens/project_detail_screen.dart' as leader;
+import '../features/leader/screens/projects_overview_screen.dart';
+import '../features/leader/screens/task_detail_screen.dart' as leader;
+import '../features/leader/screens/team_members_screen.dart';
 import '../features/member/screens/my_tasks_screen.dart';
-import '../features/member/screens/profile_screen.dart';
 import '../features/member/screens/project_chat_screen.dart';
 import '../features/member/screens/project_detail_screen.dart' as member;
 import '../features/member/screens/request_leave_screen.dart';
 import '../features/member/screens/task_detail_screen.dart' as member;
-import '../features/pm/screens/analytics_screen.dart';
-import '../features/pm/screens/calendar_screen.dart';
-import '../features/pm/screens/leave_requests_screen.dart';
-import '../features/pm/screens/project_detail_screen.dart' as pm;
-import '../features/pm/screens/projects_overview_screen.dart';
-import '../features/pm/screens/task_detail_screen.dart' as pm;
-import '../features/pm/screens/team_members_screen.dart';
-import '../features/role_select/role_select_screen.dart';
+import '../features/profile/presentation/profile_page.dart';
+import '../features/profile/presentation/profile_screen.dart';
+import '../navigation/leader_shell.dart';
 import '../navigation/member_shell.dart';
-import '../navigation/pm_shell.dart';
+import 'router_refresh.dart';
 
-GoRouter buildAppRouter(SessionController session) {
+final routerProvider = Provider<GoRouter>((ref) {
+  final refresh = ref.watch(routerRefreshProvider);
   return GoRouter(
-    initialLocation: '/',
-    refreshListenable: session,
+    initialLocation: '/splash',
+    refreshListenable: refresh,
     redirect: (context, state) {
-      final role = session.value;
-      final loggedIn = role != null;
-      final atRoleSelect = state.matchedLocation == '/';
+      final auth = ref.read(authControllerProvider);
+      final atSplash = state.matchedLocation == '/splash';
 
-      if (!loggedIn) return atRoleSelect ? null : '/';
-      if (atRoleSelect) {
-        return role == UserRole.pm ? '/pm/projects' : '/member/tasks';
+      // FR-1.4 groundwork, part 1: wait for the initial auth check before
+      // sending anyone to login or a dashboard, so neither one flashes.
+      if (auth.loading) {
+        return atSplash ? null : '/splash';
       }
-      if (role == UserRole.pm && state.matchedLocation.startsWith('/member')) {
-        return '/pm/projects';
+
+      final loggingIn =
+          state.matchedLocation == '/login' ||
+          state.matchedLocation == '/register';
+
+      // FR-1.4 groundwork, part 2: logged-out users always go to login.
+      if (!auth.isLoggedIn) {
+        return loggingIn ? null : '/login';
       }
-      if (role == UserRole.member && state.matchedLocation.startsWith('/pm')) {
+
+      // FR-1.4 groundwork, part 3: logged-in users never see login/register.
+      if (loggingIn || atSplash) {
+        return auth.sessionRole == UserRole.leader
+            ? '/leader/projects'
+            : '/member/tasks';
+      }
+
+      final role = auth.sessionRole;
+      if (role == UserRole.leader &&
+          state.matchedLocation.startsWith('/member')) {
+        return '/leader/projects';
+      }
+      if (role == UserRole.member &&
+          state.matchedLocation.startsWith('/leader')) {
         return '/member/tasks';
       }
       return null;
     },
     routes: [
       GoRoute(
-        path: '/',
-        builder: (context, state) => RoleSelectScreen(session: session),
+        path: '/splash',
+        builder: (context, state) => const SplashScreen(),
       ),
       GoRoute(
-        path: '/pm/projects/:projectId',
-        builder: (context, state) => pm.ProjectDetailScreen(
+        path: '/login',
+        builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: '/register',
+        builder: (context, state) => const RegisterScreen(),
+      ),
+      GoRoute(
+        path: '/profile',
+        builder: (context, state) => const ProfilePage(),
+      ),
+      GoRoute(
+        path: '/leader/projects/:projectId',
+        builder: (context, state) => leader.ProjectDetailScreen(
           projectId: state.pathParameters['projectId']!,
         ),
         routes: [
           GoRoute(
             path: 'tasks/:taskId',
-            builder: (context, state) => pm.TaskDetailScreen(
+            builder: (context, state) => leader.TaskDetailScreen(
               projectId: state.pathParameters['projectId']!,
               taskId: state.pathParameters['taskId']!,
             ),
@@ -83,12 +122,12 @@ GoRouter buildAppRouter(SessionController session) {
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
-            PmShell(navigationShell: navigationShell, session: session),
+            LeaderShell(navigationShell: navigationShell),
         branches: [
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/pm/projects',
+                path: '/leader/projects',
                 builder: (context, state) => const ProjectsOverviewScreen(),
               ),
             ],
@@ -96,7 +135,7 @@ GoRouter buildAppRouter(SessionController session) {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/pm/team',
+                path: '/leader/team',
                 builder: (context, state) => const TeamMembersScreen(),
               ),
             ],
@@ -104,7 +143,7 @@ GoRouter buildAppRouter(SessionController session) {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/pm/leave',
+                path: '/leader/leave',
                 builder: (context, state) => const LeaveRequestsScreen(),
               ),
             ],
@@ -112,7 +151,7 @@ GoRouter buildAppRouter(SessionController session) {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/pm/calendar',
+                path: '/leader/calendar',
                 builder: (context, state) => const CalendarScreen(),
               ),
             ],
@@ -120,7 +159,7 @@ GoRouter buildAppRouter(SessionController session) {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/pm/analytics',
+                path: '/leader/analytics',
                 builder: (context, state) => const AnalyticsScreen(),
               ),
             ],
@@ -128,7 +167,7 @@ GoRouter buildAppRouter(SessionController session) {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/pm/notifications',
+                path: '/leader/notifications',
                 builder: (context, state) => const NotificationsScreen(),
               ),
             ],
@@ -137,7 +176,7 @@ GoRouter buildAppRouter(SessionController session) {
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
-            MemberShell(navigationShell: navigationShell, session: session),
+            MemberShell(navigationShell: navigationShell),
         branches: [
           StatefulShellBranch(
             routes: [
@@ -175,4 +214,4 @@ GoRouter buildAppRouter(SessionController session) {
       ),
     ],
   );
-}
+});

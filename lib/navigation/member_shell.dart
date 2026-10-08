@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../app/theme_mode_menu_button.dart';
-import '../core/user_role.dart';
+import '../features/auth/presentation/widgets/sign_out_button.dart';
 import 'adaptive_shell.dart';
 
 const memberDestinations = [
@@ -29,14 +29,9 @@ const memberDestinations = [
 ];
 
 class MemberShell extends StatelessWidget {
-  const MemberShell({
-    super.key,
-    required this.navigationShell,
-    required this.session,
-  });
+  const MemberShell({super.key, required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
-  final SessionController session;
 
   @override
   Widget build(BuildContext context) {
@@ -44,16 +39,11 @@ class MemberShell extends StatelessWidget {
       title: 'Member Dashboard',
       destinations: memberDestinations,
       selectedIndex: navigationShell.currentIndex,
-      onDestinationSelected: (index) =>
-          navigationShell.goBranch(index, initialLocation: index == navigationShell.currentIndex),
-      actions: [
-        const ThemeModeMenuButton(),
-        IconButton(
-          tooltip: 'Switch dashboard',
-          onPressed: session.signOut,
-          icon: const Icon(Icons.swap_horiz),
-        ),
-      ],
+      onDestinationSelected: (index) => navigationShell.goBranch(
+        index,
+        initialLocation: index == navigationShell.currentIndex,
+      ),
+      actions: [const ThemeModeMenuButton(), const SignOutButton()],
       body: navigationShell,
     );
   }

@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../app/theme_mode_menu_button.dart';
-import '../core/user_role.dart';
+import '../features/auth/presentation/widgets/sign_out_button.dart';
 import 'adaptive_shell.dart';
 
-const pmDestinations = [
+const leaderDestinations = [
   NavDestinationSpec(
     icon: Icons.folder_open_outlined,
     selectedIcon: Icons.folder_open,
@@ -38,31 +38,29 @@ const pmDestinations = [
   ),
 ];
 
-class PmShell extends StatelessWidget {
-  const PmShell({
-    super.key,
-    required this.navigationShell,
-    required this.session,
-  });
+class LeaderShell extends StatelessWidget {
+  const LeaderShell({super.key, required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
-  final SessionController session;
 
   @override
   Widget build(BuildContext context) {
     return AdaptiveShell(
-      title: 'PM Dashboard',
-      destinations: pmDestinations,
+      title: 'Project Leader Dashboard',
+      destinations: leaderDestinations,
       selectedIndex: navigationShell.currentIndex,
-      onDestinationSelected: (index) =>
-          navigationShell.goBranch(index, initialLocation: index == navigationShell.currentIndex),
+      onDestinationSelected: (index) => navigationShell.goBranch(
+        index,
+        initialLocation: index == navigationShell.currentIndex,
+      ),
       actions: [
         const ThemeModeMenuButton(),
         IconButton(
-          tooltip: 'Switch dashboard',
-          onPressed: session.signOut,
-          icon: const Icon(Icons.swap_horiz),
+          tooltip: 'Profile',
+          onPressed: () => context.push('/profile'),
+          icon: const Icon(Icons.person_outline),
         ),
+        const SignOutButton(),
       ],
       body: navigationShell,
     );

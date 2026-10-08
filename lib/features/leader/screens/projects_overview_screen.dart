@@ -13,7 +13,7 @@ class ProjectsOverviewScreen extends StatelessWidget {
       message:
           'Projects Overview\n(list + progress %, create/edit project)\ncoming in a later phase',
       child: FilledButton.tonal(
-        onPressed: () => context.go('/pm/projects/demo-project'),
+        onPressed: () => context.go('/leader/projects/demo-project'),
         child: const Text('Open demo project detail'),
       ),
     );

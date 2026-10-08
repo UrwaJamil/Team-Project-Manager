@@ -1,172 +1,88 @@
-# Flutter Project Management System — Spec Document
+# Project Management System (Flutter + Firebase)
 
-## 1. Overview
+Full product spec: `docs/SPEC.md` (read it before starting any phase).
+This file = decisions, architecture, and build rules. If they conflict, ask me.
 
-A Flutter-based Project Management System with **two dashboards**:
+## Stack (decided)
+- Flutter (target: Android + Web first; Windows desktop optional)
+- State management: **Riverpod** (`flutter_riverpod`, use `riverpod_annotation` only if I ask)
+- Navigation: **go_router** with role-aware redirects
+- Backend: **Firebase** — Auth, Cloud Firestore, Cloud Storage, FCM
+- Models: plain immutable Dart classes with `fromMap` / `toMap` (add `freezed` later only if needed)
+- Lints: `flutter_lints`, keep `flutter analyze` at 0 issues
 
-1. **Project Leader (PM) Dashboard** — create projects, assign tasks, set deadlines, monitor progress, manage team.
-2. **Team Member Dashboard** — view assigned tasks, update task status, chat, request help, request leave.
+## Architecture: feature-first
 
----
+lib/
+main.dart
+app/ # app widget, router, theme, constants
+core/ # shared: firebase providers, utils, widgets, error handling
+features/
+auth/ # login, register, auth state, role
+projects/ # project CRUD, members, progress
+tasks/ # task CRUD, status, subtasks, comments, help notes
+chat/ # per-project chat
+leave/ # leave requests + On Leave badge
+notifications/ # in-app center + FCM
+dashboard/ # PM dashboard, Member "My Tasks"
+reports/ # analytics, calendar, PDF export
 
-## 2. Core Features (from original idea)
+each feature: data/ (repositories, models) · application/ (providers) · presentation/ (screens, widgets)
+Rules: UI never talks to Firestore directly — only through a repository. Repositories are exposed via Riverpod providers.
 
-### 2.1 Project Creation (PM only)
-- PM creates a new project (name, description, start date, overall deadline).
-- PM adds team members to the project.
-- PM creates tasks inside the project and assigns each task to one or more members.
-- Each task has its **own deadline**, independent of other tasks (e.g. "Task A deadline: 5 Oct", "Task B deadline: 10 Oct").
+## Requirements numbering
+If `docs/SPEC.md` contains FR-numbered requirements (e.g. FR-1.1, FR-2.3), treat each FR as a precise, testable requirement — more authoritative than the prose sections above it when the two overlap. When implementing a phase, list which FR numbers it covers and confirm each is satisfied before calling the phase done.
 
-### 2.2 Task Visibility & Access
-- **Members** can see the **entire project** (all tasks, all members, overall progress) — read-only for tasks not assigned to them.
-- Members have **edit access only to their own assigned tasks** (status updates, notes, attachments).
-- **PM** has full edit access to everything (create/edit/delete/reassign any task).
+## Key decisions on the spec
+1. **Hybrid role model.** At registration the user picks a default role (Project Leader or Team Member, per FR-1.1) — this decides which dashboard they land on right after login/register (FR-1.3) and is stored on `users/{uid}.defaultRole`. The role's stored/code value is exactly `"leader"` for Project Leader and `"member"` for Team Member — use `leader`, never `pm` or `pl`, anywhere in code, Firestore fields, enum names (`UserRole.leader`), or debug output, so the stored value always reads unambiguously as "Project Leader". Actual permissions are per project: `projects/{id}.members` = map `{uid: "leader" | "member"}` plus `memberIds[]` (for `array-contains` queries). A user's role inside a specific project always follows that project's `members` map, even if it differs from their `defaultRole` (e.g. a Project Leader added as a member on someone else's project sees that project as a member). The home screen shows the user's projects grouped by their role in each, and a user can switch which dashboard view they're in.
+2. **Login and register screen layout:** logo at top, then a role toggle (Project Leader / Team Member). On the register screen this toggle sets `users/{uid}.defaultRole`. On the login screen it's a convenience for which dashboard to land on this session (default to the account's stored `defaultRole`), not a re-registration. Below the toggle: the email/password fields and the primary action button. At the bottom: a link to switch between login and register ("Don't have an account? Create new account" / "Already have an account? Log in").
+3. **Permissions are enforced in Firestore Security Rules**, not just hidden in the UI.
+   - Members: read whole project; update only tasks where `assignedTo` contains their uid, and only fields: `status`, `helpNote`, `subtasks`, `attachments`.
+   - PM: full write on the project's tasks/members.
+4. **Chat messages live in a subcollection** (`projects/{id}/messages`), never an array in a document. One chat per project, chat id = project id.
+5. **Task comments and history** are subcollections of the task (`comments`, `history`).
+6. **Leave**: `leaveRequests` collection; an approved request in the current date range shows the "On Leave" badge (computed on read, not stored as a flag).
+7. **Notifications**: build the in-app notification center first (Firestore `notifications`). Push (FCM) and scheduled "deadline in 24h" reminders need Cloud Functions, which may need the Blaze plan — do these last and ask me before enabling anything paid.
+8. Cloud Storage (attachments) may also need Blaze on new projects — verify in console; if unavailable, stub attachments behind a repository interface and defer.
 
-### 2.3 Task Status
-- **To Do** — not started yet
-- **In Progress** — member currently working on it
-- **Blocked / Needs Help** — stuck, waiting on someone (see 2.4)
-- **Completed** — done, marked by the assigned member (PM can also verify/reopen)
+## Data model (Firestore)
 
-### 2.4 "Help Needed" Notes
-- If a task is stuck (e.g. needs a graphic designer, needs input from another member, waiting on PM approval), the member can:
-  - Set status to **Blocked**
-  - Add a **note** explaining why (e.g. "Waiting on graphic designer for banner design")
-  - Optionally **tag/mention** the specific person or role whose help is needed
-- This note is visible to PM and (optionally) the whole project team, so the right person can jump in.
+users/{uid} name, email, defaultRole(leader|member), skillTags[], photoUrl, createdAt
+projects/{pid} name, description, startDate, deadline, status(active|archived),
+createdBy, members{uid: role}, memberIds[], createdAt
+projects/{pid}/tasks/{tid} title, description, assignedTo[], priority(high|medium|low),
+status(todo|in_progress|blocked|completed), deadline,
+helpNote{text, taggedUserId?, taggedSkill?}, subtasks[{title,done}],
+attachments[], createdBy, createdAt, updatedAt
+projects/{pid}/tasks/{tid}/comments/{cid}
+projects/{pid}/tasks/{tid}/history/{hid} who, action, from, to, at
+projects/{pid}/messages/{mid} text, senderId, createdAt, mentions[], attachments[], pinned
+leaveRequests/{lid} userId, fromDate, toDate, reason, status(pending|approved|rejected), decidedBy
+notifications/{nid} userId, type, projectId?, taskId?, message, read, createdAt
 
-### 2.5 Project Chat
-- Every project has **its own dedicated chat** (group chat between PM + assigned members).
-- **New project = new chat**, even if the members are exactly the same as another project. Chats are never shared/reused across projects.
-- Chat is scoped strictly to that project's context.
+Note: tasks are a subcollection of the project (not top-level) so rules and queries stay simple. Use a `collectionGroup` query for "My Tasks across all projects" (needs a composite index — Claude Code should tell me the exact index to create).
 
-### 2.6 Leave Status
-- If a member is on leave, an **"On Leave" badge/tag** appears next to their name everywhere they're listed — in the project members list, task assignment list, and chat participant list.
-- PM (and ideally the member) can set/update leave status with a date range.
+## Build phases (do ONE phase at a time, stop after each)
+| # | Phase | Done when |
+|---|-------|-----------|
+| 0 | Scaffold: packages, folder structure, theme (light+dark), router, Firebase init, placeholder screens | `flutter run` shows a themed app; `flutter analyze` clean |
+| 1 | Auth: register/login/logout, user doc, profile with skill tags, auth-gated router | I can register, log in, and stay logged in after restart |
+| 2 | Projects: create/edit/archive project, add/remove members (search by email), project list with progress % | PM creates a project and adds a member who then sees it |
+| 3 | Tasks: create/edit/delete/reassign (PM), per-task deadline + priority, status updates (assignee), overdue highlight, Member "My Tasks" screen, Firestore rules for permissions | Member can edit only their own tasks; rules verified in emulator/tests |
+| 4 | Blocked/Help: status Blocked + help note + tag person/skill, "suggested helpers" by skill tag, sub-tasks, task comments, task history | Blocked note visible to PM and team |
+| 5 | Project chat: realtime messages, @mentions, pin, image/file share (if storage available) | Two accounts chat in realtime, one chat per project |
+| 6 | Leave: request → PM approve/reject → On Leave badge everywhere members are listed + deadline-conflict warning | Badge shows in members list, task assignee picker, chat participants |
+| 7 | Views: Kanban (drag & drop), calendar of deadlines, search/filters, favorites, archive | Dragging a card changes status (respecting permissions) |
+| 8 | Notifications: in-app center first, then FCM push | Assigned task → assignee sees notification |
+| 9 | Analytics + PDF weekly report, polish, empty/error/loading states | Report exports |
 
----
-
-## 3. Additional Recommended Features
-
-### 3.1 Task Management Enhancements
-- **Priority levels**: High / Medium / Low per task.
-- **Sub-tasks / checklist** inside a task (e.g. "Design → Wireframe, Mockup, Final Export").
-- **File attachments** on tasks (images, PDFs, docs).
-- **Task-level comments** — a mini discussion thread specific to one task, separate from the main project chat. Keeps task-specific back-and-forth organized.
-- **Task history/timeline** — log of status changes, reassignments, edits (who did what, when).
-- **Reassign task** — PM can move a task from one member to another.
-- **Overdue highlighting** — tasks past their deadline are visually flagged (e.g. red) on both dashboards.
-
-### 3.2 Member Skill Tags
-- Each member profile has **skill tags** (e.g. Graphic Designer, Backend Developer, Content Writer, QA).
-- When a task is marked "Blocked / Needs Help", PM (or the member) can see a quick list of team members with the relevant skill tag to request help from — directly useful for the "graphic designer ki help chahiye" scenario.
-
-### 3.3 Notifications
-- Task assigned to you
-- Deadline approaching (e.g. 24 hrs before)
-- Task marked overdue
-- Someone requested your help on a task (skill-tag match or direct mention)
-- New chat message / you were @mentioned
-- Leave request approved/rejected
-- Push notifications (Firebase Cloud Messaging) + in-app notification center.
-
-### 3.4 Leave Request Workflow
-- Member submits a leave request (date range + reason) from their dashboard.
-- PM approves/rejects.
-- Approved leave automatically shows the "On Leave" tag during that date range and can optionally auto-notify PM if any of the member's tasks have deadlines during the leave period (conflict warning).
-
-### 3.5 Views & Reporting (PM Dashboard)
-- **Kanban board view**: columns for To Do / In Progress / Blocked / Completed, drag-and-drop across a project.
-- **Calendar view**: all task deadlines across all projects in one calendar.
-- **Progress bar / completion %** per project (auto-calculated from task statuses).
-- **Analytics/reports**: team performance, tasks completed vs overdue, per-member workload, project health at a glance.
-- **Export report as PDF** (e.g. weekly project summary).
-
-### 3.6 Chat Enhancements
-- **@mentions** within project chat (notifies the mentioned person).
-- **Pin important messages** (e.g. pinned deadline reminders or decisions).
-- **File/image sharing** in chat.
-- **Online/offline / last seen** indicator for members.
-- **Read receipts** (optional).
-
-### 3.7 Access & Roles
-- Role-based permissions:
-  - **PM**: create/edit/delete projects & tasks, assign/reassign, manage members, approve leave, view all reports.
-  - **Member**: view full project, edit only own tasks, chat, request help, request leave.
-- Option for **Co-Leader / Sub-lead** role in bigger projects (optional, for scalability).
-
-### 3.8 Quality-of-Life Features
-- **Search & filters**: by project, member, status, priority, deadline.
-- **Archive** completed/closed projects (keeps dashboard clean, but data retained).
-- **Star/favorite** projects for quick access.
-- **Multi-project view** for members who are on more than one project at once — a unified "My Tasks" list across all their projects, sorted by deadline.
-- **Dark mode**.
-
----
-
-## 4. Suggested Tech Stack
-
-| Layer | Suggestion |
-|---|---|
-| Frontend | Flutter (mobile + web from same codebase) |
-| State Management | Riverpod or Bloc |
-| Backend / DB | Firebase (Firestore + Auth + Cloud Storage + Cloud Messaging) — fastest for real-time chat & notifications; OR custom REST API (Node.js/Django) + PostgreSQL if you need more control |
-| Real-time Chat | Firestore streams (if Firebase) or Socket.IO (if custom backend) |
-| Notifications | Firebase Cloud Messaging (FCM) |
-| File Storage | Firebase Storage / S3 |
-
----
-
-## 5. Suggested Data Model (Firestore-style collections)
-
-```
-users/
-  - id, name, email, role (pm/member), skillTags[], leaveStatus{from, to, approved}
-
-projects/
-  - id, name, description, createdBy(pmId), memberIds[], startDate, deadline, status, chatId
-
-tasks/
-  - id, projectId, title, description, assignedTo[], priority, status,
-    deadline, helpNote{text, taggedUserId}, attachments[], subtasks[], createdAt, updatedAt
-
-chats/
-  - id, projectId, participantIds[], messages[] (subcollection: text, senderId, timestamp, attachments, mentions[])
-
-leaveRequests/
-  - id, userId, fromDate, toDate, reason, status(pending/approved/rejected)
-
-notifications/
-  - id, userId, type, referenceId, message, read(bool), timestamp
-```
-
----
-
-## 6. Suggested Screen List
-
-**PM Dashboard**
-1. Projects Overview (list + progress %)
-2. Create/Edit Project
-3. Project Detail (Kanban board + members + chat access)
-4. Task Detail / Create Task
-5. Team Members & Skills
-6. Leave Requests (approve/reject)
-7. Analytics/Reports
-8. Calendar View
-9. Notifications
-
-**Member Dashboard**
-1. My Tasks (across all projects, sorted by deadline)
-2. Project Detail (full view, own tasks editable)
-3. Task Detail (status update, add "help needed" note, sub-tasks, attachments, comments)
-4. Project Chat
-5. Request Leave
-6. Notifications
-7. Profile (edit skill tags)
-
----
-
-## 7. Next Steps
-- Decide backend: Firebase (faster to build, good for MVP) vs custom API (more control, more work).
-- Wireframe the Kanban board + task detail screen first, since they're the most-used surfaces.
-- Build role-based auth first (PM vs Member) since permissions touch every other screen.
+## Working rules for Claude Code
+- Start each phase with a short plan (files to create/change) and wait for my OK.
+- Small, working increments. After each step run `flutter analyze` and fix issues; run `flutter test` when tests exist.
+- Never commit secrets. `firebase_options.dart` is fine to commit; service-account keys are not.
+- Every screen needs loading, empty, and error states.
+- Don't add packages without saying why. Prefer well-maintained ones (check pub.dev score).
+- Keep widgets small; extract when a build method passes ~80 lines.
+- Add unit tests for repositories' permission logic and progress-% calculation.
+- Commit-ready state at the end of each phase, with a one-paragraph summary of what changed and what to test manually.
+- If something needs manual setup (Firebase console, indexes, SHA-1 keys), give me exact steps instead of guessing.

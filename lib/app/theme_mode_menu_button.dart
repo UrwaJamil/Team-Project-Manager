@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'theme_mode_controller.dart';
 
 /// App-bar action for switching between Light / Dark / System theme mode.
-/// Placed in both the PM and Member dashboard shells.
+/// Placed in both the Project Leader and Member dashboard shells.
 class ThemeModeMenuButton extends ConsumerWidget {
   const ThemeModeMenuButton({super.key});
 
